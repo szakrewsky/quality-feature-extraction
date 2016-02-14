@@ -31,7 +31,7 @@ def spatial_edge_distribution2(img):
 
 def hue_count_feature(img, a=0.05):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2HSV)
-    mask = cv2.inRange(img, np.array([0, 255*0.15, 255*0.2], int), np.array([179, 255*0.95, 255], int))
+    mask = cv2.inRange(img, np.array([0, 255*0.2, 255*0.15], int), np.array([179, 255, 255*0.95], int))
     hist = cv2.calcHist([img], [0], mask, [20], [0, 179])
     N = hist > a*np.max(hist)
     return 20 - np.count_nonzero(N)
