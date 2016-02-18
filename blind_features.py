@@ -131,12 +131,89 @@ def get_image():
     print r.json()
 
 
+def mser_feature(img):
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    mser = cv2.MSER_create()
+    regions = mser.detectRegions(img, None)
+    return len(regions)
+
+
+def saliency_feature(img):
+    img_orig = img
+    img = cv2.resize(img, (64, 64))
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # import math
+    # h = cv2.getOptimalDFTSize(img.shape[0])
+    # w = cv2.getOptimalDFTSize(img.shape[1])
+    # print "Resizing (%d, %d) to (%d, %d)" % (img.shape[0], img.shape[1], h, w)
+    # h = (h - img.shape[0])/2.0
+    # w = (w - img.shape[1])/2.0
+    # img = cv2.copyMakeBorder(img, int(math.floor(h)), int(math.ceil(h)), int(math.floor(w)), int(math.ceil(w)), cv2.BORDER_CONSTANT, value=0)
+
+    dft = cv2.dft(np.float32(img), flags=cv2.DFT_COMPLEX_OUTPUT)
+    A, P = cv2.cartToPolar(dft[:,:,0], dft[:,:,1])
+    L = cv2.log(A)
+    h_n = (1./3**2)*np.ones((3,3))
+    R = L - cv2.filter2D(L, -1, h_n)
+    S = cv2.GaussianBlur(cv2.idft(np.dstack(cv2.polarToCart(cv2.exp(R), P)), flags=cv2.DFT_REAL_OUTPUT)**2, (0,0), 8)
+    S = cv2.resize(cv2.normalize(S, None, 0, 1, cv2.NORM_MINMAX), (img_orig.shape[1],img_orig.shape[0]))
+
+    # cv2.namedWindow('tmp1', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp1', img_orig)
+    # cv2.namedWindow('tmp', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp', S)
+    # cv2.waitKey()
+
+    return S
+
+def thirds_map_feature(img):
+    h, w = img.shape[0], img.shape[1]
+    htwidth = h/6.
+    ht1 = h/3.
+    ht2 = 2*h/3.
+    wtwidth = w/6.
+    wt1 = w/3.
+    wt2 = 2*w/3.
+
+    x = [0, wt1 - wtwidth/2, wt1 + wtwidth/2, wt2 - wtwidth/2, wt2 + wtwidth/2, w]
+    y = [0, ht1 - htwidth/2, ht1 + htwidth/2, ht2 - htwidth/2, ht2 + htwidth/2, h]
+
+    TM = np.zeros((5,5))
+    S = saliency_feature(img)
+    for j in range(0,5):
+        for i in range(0,5):
+            roi = S[y[j]:y[j+1],x[i]:x[i+1]]
+            TM[j, i] = np.sum(roi)/(roi.shape[0]*roi.shape[1])
+    TM = TM/np.sum(TM)
+
+    # draw thirds lines
+    # S[:,x[1]] = 1
+    # S[:,x[2]] = 1
+    # S[:,x[3]] = 1
+    # S[:,x[4]] = 1
+    # S[y[1],:] = 1
+    # S[y[2],:] = 1
+    # S[y[3],:] = 1
+    # S[y[4],:] = 1
+
+    # cv2.namedWindow('tmp1', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp1', img)
+    # cv2.namedWindow('tmp2', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp2', S)
+    # cv2.namedWindow('tmp3', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp3', TM)
+    # cv2.waitKey()
+    return TM.ravel()
+
+
 if __name__ == '__main__':
 
     arguments = docopt.docopt(__doc__)
     for i in arguments['<image>']:
         img = cv2.imread(i)
         print i, spatial_edge_distribution2(img), hue_count_feature(img), blur_feature(img), \
-            blur_feature_tong_etal(img), contrast_feature(img), brightness_feature(img)
+            blur_feature_tong_etal(img), contrast_feature(img), brightness_feature(img), mser_feature(img), \
+            thirds_map_feature(img)
 
 print get_image()
