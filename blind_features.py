@@ -10,7 +10,10 @@ __author__ = 'Stephen Zakrewsky'
 
 import cv2
 import docopt
+import math
 import numpy as np
+import pywt
+import scipy.ndimage
 
 
 def spatial_edge_distribution2(img):
@@ -46,7 +49,6 @@ def blur_feature(img, thresh=5):
 
 
 def blur_feature_tong_etal(img, thresh=35, MinZero=0.05):
-    import pywt
     w = pywt.wavedec2(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 'haar', level=3)
 
     emap = [np.sqrt(w[i][0]**2 + w[i][1]**2 + w[i][2]**2) for i in range(1, len(w))]
@@ -86,9 +88,25 @@ def contrast_feature(img):
 
 
 def brightness_feature(img):
+    """
+    Ke06 average brightness b
+    :param img:
+    :return:
+    """
     img = np.float32(img)/255
     img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
     return np.mean(img[:,:,0])
+
+
+def avg_lightness(img):
+    """
+    Wang15 f1 average lightness
+    Chen14 lightness
+    :param img:
+    :return:
+    """
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    return np.sum(img[:,:,0])/(img.shape[0] * img.shape[1])
 
 
 def width_center_mass(x, p):
@@ -107,7 +125,6 @@ def width_center_mass(x, p):
 
 def width_mass(x, p):
     count = 1
-    import scipy.ndimage
     c = int(scipy.ndimage.center_of_mass(x)[0] + 0.5)
     n = len(x)
     center_mass = x[c]
@@ -143,7 +160,6 @@ def saliency_feature(img):
     img = cv2.resize(img, (64, 64))
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-    # import math
     # h = cv2.getOptimalDFTSize(img.shape[0])
     # w = cv2.getOptimalDFTSize(img.shape[1])
     # print "Resizing (%d, %d) to (%d, %d)" % (img.shape[0], img.shape[1], h, w)
@@ -207,6 +223,155 @@ def thirds_map_feature(img):
     return TM.ravel()
 
 
+def wavelet_smoothness_feature(img):
+    """
+    Wang15 f14 smoothness feature
+    :param img:
+    :return:
+    """
+    img = np.float32(img)/255
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    w = pywt.wavedec2(img[:,:,0], 'db1', level=1)
+    b = w[1]
+    return (np.sum(b[0]**2) + np.sum(b[1]**2) + np.sum(b[2]**2))/(3*b[0].shape[0]*b[0].shape[1])
+
+
+def even_border(img):
+    h = 2*((img.shape[0]+1)/2)
+    w = 2*((img.shape[1]+1)/2)
+    tmp = np.zeros((h, w))
+    # print img.shape, tmp.shape
+    tmp[0:img.shape[0], 0:img.shape[1]] = img
+    return tmp
+
+
+def laplacian_smoothness_feature(img):
+    """
+    Wang15 f18
+    :param img:
+    :return:
+    """
+    img1 = even_border(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    img2 = even_border(cv2.pyrDown(img1))
+    img3 = cv2.pyrDown(img2)
+    l2 = np.abs(img2 - cv2.pyrUp(img3))
+    # cv2.namedWindow('tmp', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp', l2)
+    # cv2.waitKey()
+    return np.sum(l2)/(l2.shape[0]*l2.shape[1])
+
+
+def get_grid(img):
+    h, w = img.shape[0], img.shape[1]
+    ht1 = h/4.
+    ht2 = 2*h/4.
+    ht3 = 3*h/4.
+    wt1 = w/4.
+    wt2 = 2*w/4.
+    wt3 = 3*w/4.
+
+    x = [0, wt1, wt2, wt3, w]
+    y = [0, ht1, ht2, ht3, h]
+
+    # draw lines
+    # c = (0,0,255)
+    # img[:,x[1]] = c
+    # img[:,x[2]] = c
+    # img[:,x[3]] = c
+    # img[y[1],:] = c
+    # img[y[2],:] = c
+    # img[y[3],:] = c
+    # cv2.namedWindow('tmp3', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp3', img)
+    # cv2.waitKey()
+    return x, y
+
+
+def wavelet_low_dof(img):
+    img = np.float32(img)/255
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    w = pywt.wavedec2(img[:,:,0], 'db1', level=1)
+    b = w[1]
+    w_3 = b[0]**2 + b[1]**2 + b[2]**2
+    x, y = get_grid(w_3)
+    M = []
+    for j in range(0, 4):
+        for i in range(0, 4):
+            M.append(w_3[y[j]:y[j+1],x[i]:x[i+1]])
+    return (np.sum(M[5]) + np.sum(M[6]) + np.sum(M[9]) + np.sum(M[10]))/np.sum(w_3)
+
+
+def laplacian_low_dof(img):
+    img1 = even_border(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    img2 = cv2.pyrDown(img1)
+    l1 = np.abs(img1 - cv2.pyrUp(img2))
+    w_3 = l1
+    x, y = get_grid(w_3)
+    M = []
+    for j in range(0, 4):
+        for i in range(0, 4):
+            M.append(w_3[y[j]:y[j+1],x[i]:x[i+1]])
+    return (np.sum(M[5]) + np.sum(M[6]) + np.sum(M[9]) + np.sum(M[10]))/np.sum(w_3)
+
+
+def laplacian_low_dof_swd(img):
+    img1 = even_border(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY))
+    img2 = cv2.pyrDown(img1)
+    l1 = np.abs(img1 - cv2.pyrUp(img2))
+    l1 = l1/np.max(l1)
+    y, x = scipy.ndimage.center_of_mass(l1)
+    jrange = np.arange(0, l1.shape[0])
+    irange = np.arange(0, l1.shape[1])
+    l1 = l1 * np.sqrt(np.add.outer((jrange - y)**2, (irange - x)**2))
+    return np.sum(l1)/(l1.shape[0] * l1.shape[1])
+
+
+def lbp(img):
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    ret = np.zeros_like(img)
+    ret[1:img.shape[0]-1,1:img.shape[1]-1] \
+     = ((img[0:img.shape[0]-2,0:img.shape[1]-2] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 7) \
+     + ((img[0:img.shape[0]-2,1:img.shape[1]-1] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 6) \
+     + ((img[0:img.shape[0]-2,2:img.shape[1]-0] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 5) \
+     + ((img[1:img.shape[0]-1,0:img.shape[1]-2] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 4) \
+     + ((img[1:img.shape[0]-1,2:img.shape[1]-0] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 3) \
+     + ((img[2:img.shape[0]-0,0:img.shape[1]-2] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 2) \
+     + ((img[2:img.shape[0]-0,1:img.shape[1]-1] > img[1:img.shape[0]-1,1:img.shape[1]-1]) << 1) \
+     + (img[2:img.shape[0]-0,2:img.shape[1]-0] > img[1:img.shape[0]-1,1:img.shape[1]-1])
+
+    # cv2.namedWindow('tmp', cv2.WINDOW_NORMAL)
+    # cv2.imshow('tmp', ret)
+    # cv2.waitKey()
+    return ret
+
+
+def texture(img):
+    """
+    Khosla14 Texture (Local Binary Pattern) feature (experimental)
+    :param img:
+    :return:
+    """
+    lbf = lbp(img)
+
+    output = []
+
+    p1h = lbf.shape[0]/2
+    p1w = lbf.shape[1]/2
+    p2h = lbf.shape[0]/4
+    p2w = lbf.shape[1]/4
+
+    # print "lost pixels", lbf.shape[0] - p1h*2, lbf.shape[1] - p1w*2, lbf.shape[0] - p2h*4, lbf.shape[1] - p2w*4
+
+    for j in range(0, 2*p1h, p1h):
+        for i in range(0, 2*p1w, p1w):
+            output.append(np.bincount(lbf[j:j+p1h,i:i+p1w].ravel(), minlength=256) * (1/4.0))
+    for j in range(0, 4*p2h, p2h):
+        for i in range(0, 4*p2w, p2w):
+            output.append(np.bincount(lbf[j:j+p2h,i:i+p2w].ravel(), minlength=256) * (1/2.0))
+
+    return np.array(output).ravel()
+
+
 if __name__ == '__main__':
 
     arguments = docopt.docopt(__doc__)
@@ -214,6 +379,8 @@ if __name__ == '__main__':
         img = cv2.imread(i)
         print i, spatial_edge_distribution2(img), hue_count_feature(img), blur_feature(img), \
             blur_feature_tong_etal(img), contrast_feature(img), brightness_feature(img), mser_feature(img), \
-            thirds_map_feature(img)
+            thirds_map_feature(img), avg_lightness(img), wavelet_smoothness_feature(img), \
+            laplacian_smoothness_feature(img), wavelet_low_dof(img), laplacian_low_dof(img), \
+            laplacian_low_dof_swd(img), texture(img)
 
 print get_image()
