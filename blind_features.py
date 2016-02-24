@@ -10,6 +10,7 @@ __author__ = 'Stephen Zakrewsky'
 
 import cv2
 import docopt
+import json
 import math
 import numpy as np
 import pywt
@@ -144,8 +145,13 @@ def width_mass(x, p):
 
 def mser_feature(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    mser = cv2.MSER()
-    regions = mser.detect(img, None)
+    (major, minor, subminor) = (cv2.__version__).split('.')
+    if major < 3:
+        mser = cv2.MSER()
+        regions = mser.detect(img, None)
+    else:
+        mser = cv2.MSER_create()
+        regions = mser.detectRegions(img, None)
     return len(regions)
 
 
@@ -370,10 +376,42 @@ if __name__ == '__main__':
 
     arguments = docopt.docopt(__doc__)
     for i in arguments['<image>']:
-        img = cv2.imread(i)
-        print i, spatial_edge_distribution2(img), hue_count_feature(img), blur_feature(img), \
-            blur_feature_tong_etal(img), contrast_feature(img), brightness_feature(img), mser_feature(img), \
-            thirds_map_feature(img), avg_lightness(img), wavelet_smoothness_feature(img), \
-            laplacian_smoothness_feature(img), wavelet_low_dof(img), laplacian_low_dof(img), \
-            laplacian_low_dof_swd(img), texture(img)
+        imgid = file = ''
+        try:
+            imgid, file = i.split(':')
+        except (ValueError):
+            file = i
+        img = cv2.imread(file)
+        features = {
+            'id': imgid,
+            'file': file,
+            'Ke06-qa': spatial_edge_distribution2(img),
+            'Ke06-qh': hue_count_feature(img),
+            'Ke06-qf': blur_feature(img),
+            'Ke06-tong': blur_feature_tong_etal(img),
+            'Ke06-qct': contrast_feature(img),
+            'Ke06-qb': brightness_feature(img),
+            '-mser_count': mser_feature(img),
+            'Mai11-thirds_map': thirds_map_feature(img), # this has a shape of (25,)
+            'Wang15-f1': avg_lightness(img),
+            'Wang15-f14': wavelet_smoothness_feature(img),
+            'Wang15-f18': laplacian_smoothness_feature(img),
+            'Wang15-f21': wavelet_low_dof(img),
+            'Wang15-f22': laplacian_low_dof(img),
+            'Wang15-f26': laplacian_low_dof_swd(img),
+            'Khosla14-texture': texture(img) # this has a shape of (5120,)
+        }
+
+        class ENC(json.JSONEncoder):
+            def __init__(self, *args, **kw):
+                super(ENC, self).__init__(args, kw)
+
+            def default(self, o):
+                if isinstance(o, np.generic):
+                    return o.item()
+                if isinstance(o, np.ndarray):
+                    return o.tolist()
+                return json.JSONEncoder.default(self, o)
+
+        print json.dumps(features, cls=ENC)
 
