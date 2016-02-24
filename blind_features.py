@@ -94,7 +94,7 @@ def brightness_feature(img):
     :return:
     """
     img = np.float32(img)/255
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     return np.mean(img[:,:,0])
 
 
@@ -105,7 +105,7 @@ def avg_lightness(img):
     :param img:
     :return:
     """
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     return np.sum(img[:,:,0])/(img.shape[0] * img.shape[1])
 
 
@@ -142,16 +142,10 @@ def width_mass(x, p):
     return count
 
 
-def get_image():
-    import requests
-    r = requests.get('https://openapi.etsy.com/v2/listings/175320841/images?api_key=6xlt7fqhid48yle9y2ig78k9')
-    print r.json()
-
-
 def mser_feature(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    mser = cv2.MSER_create()
-    regions = mser.detectRegions(img, None)
+    mser = cv2.MSER()
+    regions = mser.detect(img, None)
     return len(regions)
 
 
@@ -230,7 +224,7 @@ def wavelet_smoothness_feature(img):
     :return:
     """
     img = np.float32(img)/255
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     w = pywt.wavedec2(img[:,:,0], 'db1', level=1)
     b = w[1]
     return (np.sum(b[0]**2) + np.sum(b[1]**2) + np.sum(b[2]**2))/(3*b[0].shape[0]*b[0].shape[1])
@@ -289,7 +283,7 @@ def get_grid(img):
 
 def wavelet_low_dof(img):
     img = np.float32(img)/255
-    img = cv2.cvtColor(img, cv2.COLOR_BGR2Lab)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
     w = pywt.wavedec2(img[:,:,0], 'db1', level=1)
     b = w[1]
     w_3 = b[0]**2 + b[1]**2 + b[2]**2
@@ -383,4 +377,3 @@ if __name__ == '__main__':
             laplacian_smoothness_feature(img), wavelet_low_dof(img), laplacian_low_dof(img), \
             laplacian_low_dof_swd(img), texture(img)
 
-print get_image()
