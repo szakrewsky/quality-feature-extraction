@@ -59,7 +59,7 @@ def resize_borders_to_multiple_of(img, n):
     iw = img.shape[1]
     w = n * (iw/n)
     if w < iw:
-        w = iw + n
+        w = w + n
 
     j = (h - ih)/2
     i = (w - iw)/2
@@ -454,7 +454,7 @@ if __name__ == '__main__':
 	    else:
                 first = False
             print json.dumps(features, cls=ENC)
-        except ValueError as e:
+        except Exception as e:
             import traceback
 	    import sys
             print >> sys.stderr, e, traceback.format_exc(e)
