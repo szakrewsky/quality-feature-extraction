@@ -2,7 +2,7 @@
 
 """
 USAGE:
-    blind_features.py <image>...
+    blind_features.py (-d <dir> | <image>...)
 """
 
 __author__ = 'Stephen Zakrewsky'
@@ -13,6 +13,7 @@ import docopt
 import json
 import math
 import numpy as np
+import os
 import pywt
 import scipy.ndimage
 
@@ -55,6 +56,10 @@ def blur_feature_tong_etal(img, thresh=35, MinZero=0.05):
     emap = [np.sqrt(w[i][0]**2 + w[i][1]**2 + w[i][2]**2) for i in range(1, len(w))]
     window_size_map = [2, 4, 8]
     emax = [np.zeros((int(e.shape[0]/float(s) + 0.5), int(e.shape[1]/float(s) + 0.5))) for e, s in zip(emap, window_size_map)]
+
+    if emax[0].shape != emax[1].shape:
+        exc = str((emax[0].shape, emax[1].shape, emax[2].shape)) + ' ' + str((emap[0].shape, emap[1].shape, emap[2].shape))
+        raise ValueError(exc)
 
     for e, s, m in zip(emap, window_size_map, emax):
         for y in range(0, int(e.shape[0]/float(s) + 0.5)):
@@ -146,7 +151,7 @@ def width_mass(x, p):
 def mser_feature(img):
     img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
     (major, minor, subminor) = (cv2.__version__).split('.')
-    if major < 3:
+    if int(major) < 3:
         mser = cv2.MSER()
         regions = mser.detect(img, None)
     else:
@@ -375,43 +380,61 @@ def texture(img):
 if __name__ == '__main__':
 
     arguments = docopt.docopt(__doc__)
-    for i in arguments['<image>']:
+    d = arguments['<dir>']
+    if d:
+        images = [f.split(':')[0] + ':' + os.path.join(subdir, f) for subdir, dirs, files in os.walk(d) for f in files]
+    else:
+        images = arguments['<image>']
+
+    first = True
+    print '['
+    for i in images:
         imgid = file = ''
         try:
-            imgid, file = i.split(':')
+            imgid, file = i.split(':', 1)
         except (ValueError):
             file = i
         img = cv2.imread(file)
-        features = {
-            'id': imgid,
-            'file': file,
-            'Ke06-qa': spatial_edge_distribution2(img),
-            'Ke06-qh': hue_count_feature(img),
-            'Ke06-qf': blur_feature(img),
-            'Ke06-tong': blur_feature_tong_etal(img),
-            'Ke06-qct': contrast_feature(img),
-            'Ke06-qb': brightness_feature(img),
-            '-mser_count': mser_feature(img),
-            'Mai11-thirds_map': thirds_map_feature(img), # this has a shape of (25,)
-            'Wang15-f1': avg_lightness(img),
-            'Wang15-f14': wavelet_smoothness_feature(img),
-            'Wang15-f18': laplacian_smoothness_feature(img),
-            'Wang15-f21': wavelet_low_dof(img),
-            'Wang15-f22': laplacian_low_dof(img),
-            'Wang15-f26': laplacian_low_dof_swd(img),
-            'Khosla14-texture': texture(img) # this has a shape of (5120,)
-        }
 
-        class ENC(json.JSONEncoder):
-            def __init__(self, *args, **kw):
-                super(ENC, self).__init__(args, kw)
-
-            def default(self, o):
-                if isinstance(o, np.generic):
-                    return o.item()
-                if isinstance(o, np.ndarray):
-                    return o.tolist()
-                return json.JSONEncoder.default(self, o)
-
-        print json.dumps(features, cls=ENC)
-
+	try:
+            features = {
+                'id': imgid,
+                'file': file,
+                'Ke06-qa': spatial_edge_distribution2(img),
+                'Ke06-qh': hue_count_feature(img),
+                'Ke06-qf': blur_feature(img),
+                'Ke06-tong': blur_feature_tong_etal(img),
+                'Ke06-qct': contrast_feature(img),
+                'Ke06-qb': brightness_feature(img),
+                '-mser_count': mser_feature(img),
+                'Mai11-thirds_map': thirds_map_feature(img), # this has a shape of (25,)
+                'Wang15-f1': avg_lightness(img),
+                'Wang15-f14': wavelet_smoothness_feature(img),
+                'Wang15-f18': laplacian_smoothness_feature(img),
+                'Wang15-f21': wavelet_low_dof(img),
+                'Wang15-f22': laplacian_low_dof(img),
+                'Wang15-f26': laplacian_low_dof_swd(img),
+                'Khosla14-texture': texture(img) # this has a shape of (5120,)
+            }
+    
+            class ENC(json.JSONEncoder):
+                def __init__(self, *args, **kw):
+                    super(ENC, self).__init__(args, kw)
+    
+                def default(self, o):
+                    if isinstance(o, np.generic):
+                        return o.item()
+                    if isinstance(o, np.ndarray):
+                        return o.tolist()
+                    return json.JSONEncoder.default(self, o)
+    
+            if not first:
+                print ','
+	    else:
+                first = False
+            print json.dumps(features, cls=ENC)
+        except ValueError as e:
+            import traceback
+	    import sys
+            print >> sys.stderr, e, traceback.format_exc(e)
+    print ']'
