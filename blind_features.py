@@ -50,20 +50,36 @@ def blur_feature(img, thresh=5):
     return C/float(img.shape[0] * img.shape[1])
 
 
+def resize_borders_to_multiple_of(img, n):
+    ih = img.shape[0]
+    h = n * (ih/n)
+    if h < ih:
+        h = h + n
+
+    iw = img.shape[1]
+    w = n * (iw/n)
+    if w < iw:
+        w = iw + n
+
+    j = (h - ih)/2
+    i = (w - iw)/2
+    tmp = np.zeros((h, w), img.dtype)
+    tmp[j:j+ih, i:i+iw] = img
+    return tmp
+
+
 def blur_feature_tong_etal(img, thresh=35, MinZero=0.05):
-    w = pywt.wavedec2(cv2.cvtColor(img, cv2.COLOR_BGR2GRAY), 'haar', level=3)
+    img = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+    img = resize_borders_to_multiple_of(img, 8)
+    w = pywt.wavedec2(img, 'haar', level=3)
 
     emap = [np.sqrt(w[i][0]**2 + w[i][1]**2 + w[i][2]**2) for i in range(1, len(w))]
     window_size_map = [2, 4, 8]
-    emax = [np.zeros((int(e.shape[0]/float(s) + 0.5), int(e.shape[1]/float(s) + 0.5))) for e, s in zip(emap, window_size_map)]
-
-    if emax[0].shape != emax[1].shape:
-        exc = str((emax[0].shape, emax[1].shape, emax[2].shape)) + ' ' + str((emap[0].shape, emap[1].shape, emap[2].shape))
-        raise ValueError(exc)
+    emax = [np.zeros((e.shape[0]/s, e.shape[1]/s)) for e, s in zip(emap, window_size_map)]
 
     for e, s, m in zip(emap, window_size_map, emax):
-        for y in range(0, int(e.shape[0]/float(s) + 0.5)):
-            for x in range(0, int(e.shape[1]/float(s) + 0.5)):
+        for y in range(0, e.shape[0]/s):
+            for x in range(0, e.shape[1]/s):
                 ep = e[y*s:y*s+s,x*s:x*s+s]
                 m[y,x] = np.amax(ep)
 
@@ -386,9 +402,14 @@ if __name__ == '__main__':
     else:
         images = arguments['<image>']
 
+    import progressbar
+    bar = progressbar.ProgressBar(maxval=len(images), widgets=[progressbar.Bar('=', '[', ']'), ' ', progressbar.Percentage()])
+    bar.start()
+
     first = True
     print '['
-    for i in images:
+    for n,i in enumerate(images):
+        bar.update(n+1)
         imgid = file = ''
         try:
             imgid, file = i.split(':', 1)
@@ -438,3 +459,5 @@ if __name__ == '__main__':
 	    import sys
             print >> sys.stderr, e, traceback.format_exc(e)
     print ']'
+
+    bar.finish()
