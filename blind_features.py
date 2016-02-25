@@ -398,7 +398,7 @@ if __name__ == '__main__':
     arguments = docopt.docopt(__doc__)
     d = arguments['<dir>']
     if d:
-        images = [f.split(':')[0] + ':' + os.path.join(subdir, f) for subdir, dirs, files in os.walk(d) for f in files]
+        images = [os.path.join(subdir, f) for subdir, dirs, files in os.walk(d) for f in files]
     else:
         images = arguments['<image>']
 
@@ -410,17 +410,17 @@ if __name__ == '__main__':
     print '['
     for n,i in enumerate(images):
         bar.update(n+1)
-        imgid = file = ''
         try:
-            imgid, file = i.split(':', 1)
-        except (ValueError):
-            file = i
-        img = cv2.imread(file)
+            imgid = i.split('.')[-2]
+            int(imgid)
+        except ValueError:
+            imgid = ''
+        img = cv2.imread(i)
 
 	try:
             features = {
                 'id': imgid,
-                'file': file,
+                'file': i,
                 'Ke06-qa': spatial_edge_distribution2(img),
                 'Ke06-qh': hue_count_feature(img),
                 'Ke06-qf': blur_feature(img),
