@@ -95,7 +95,12 @@ def blur_feature_tong_etal(img, thresh=35, MinZero=0.05):
     N_brg = np.count_nonzero(r5)
     Per = float(N_da)/float(N_edge)
     unblured = Per > MinZero
-    BlurExtent = float(N_brg)/float(N_rg)
+
+    # if N_rg is 0 then the image must be really blurry
+    if N_rg == 0:
+        BlurExtent = 1
+    else:
+        BlurExtent = float(N_brg)/float(N_rg)
 
     return BlurExtent
 
